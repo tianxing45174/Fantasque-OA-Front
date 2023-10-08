@@ -1,0 +1,183 @@
+<template>
+  <div class="app-container">
+    <!--查询表单-->
+    <div class="search-div">
+      <el-form label-width="70px" size="small">
+        <el-row>
+          <el-col :span="24">
+            <el-form-item label="角色名称">
+              <el-input v-model="searchObj.roleName" style="width: 100%" placeholder="角色名称" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row style="display:flex">
+          <el-button type="primary" icon="el-icon-search" size="mini" :loading="loading" @click="fetchData()">搜索</el-button>
+          <el-button icon="el-icon-refresh" size="mini" @click="resetData">重置</el-button>
+          <el-button type="success" icon="el-icon-plus" size="mini" @click="popSaveForm">添 加</el-button>
+        </el-row>
+      </el-form>
+    </div>
+    <!-- 表格 -->
+    <el-table
+      v-loading="listLoading"
+      :data="list"
+      stripe
+      border
+      style="width: 100%;margin-top: 10px;"
+      @selection-change="handleSelectionChange"
+    >
+      <el-table-column type="selection" />
+
+      <el-table-column
+        label="序号"
+        width="70"
+        align="center"
+      >
+        <template slot-scope="scope">
+          {{ (page - 1) * limit + scope.$index + 1 }}
+        </template>
+      </el-table-column>
+
+      <el-table-column prop="roleName" label="角色名称" />
+      <el-table-column prop="roleCode" label="角色编码" />
+      <el-table-column prop="createTime" label="创建时间" width="160" />
+      <el-table-column label="操作" width="200" align="center">
+        <template slot-scope="scope">
+          <el-button type="primary" icon="el-icon-edit" size="mini" title="修改" @click="edit(scope.row.id)" />
+          <el-button type="danger" icon="el-icon-delete" size="mini" title="删除" @click="removeDataById(scope.row.id)" />
+        </template>
+      </el-table-column>
+    </el-table>
+    <!-- 分页组件 -->
+    <el-pagination
+      :current-page="page"
+      :total="total"
+      :page-size="limit"
+      style="padding: 30px 0; text-align: center;"
+      layout="total, prev, pager, next, jumper"
+      @current-change="fetchData"
+    />
+    <el-dialog title="添加/修改" :visible.sync="dialogVisible" width="40%" @close="closeDialog()">
+      <el-form ref="dataForm" :model="sysRole" label-width="150px" size="small" style="padding-right: 40px;">
+        <el-form-item label="角色名称">
+          <el-input v-model="sysRole.roleName" />
+        </el-form-item>
+        <el-form-item label="角色编码">
+          <el-input v-model="sysRole.roleCode" />
+        </el-form-item>
+        <el-form-item label="角色描述">
+          <el-input v-model="sysRole.description" />
+        </el-form-item>
+      </el-form>
+      <span slot="footer" class="dialog-footer">
+        <el-button size="small" icon="el-icon-refresh-right" @click="dialogVisible = false">取 消</el-button>
+        <el-button type="primary" icon="el-icon-check" size="small" @click="saveOrUpdate()">确 定</el-button>
+      </span>
+    </el-dialog>
+  </div>
+</template>
+
+<script>
+import api from '@/api/system/sysRole'
+export default {
+  name: 'List',
+
+  data() {
+    return {
+      list: [], // 列表
+      total: 0, // 总记录数
+      page: 1, // 页码
+      limit: 10, // 每页记录数
+      searchObj: {}, // 查询条件
+      multipleSelection: [], // 批量删除选中的记录列表
+      // 角色信息
+      dialogVisible: false,
+      sysRole: {},
+      saveBtnDisabled: false
+    }
+  },
+  mounted() {},
+  // 页面渲染成功后获取数据
+  created() {
+    this.fetchData()
+  },
+  methods: {
+    // 获取当前页角色列表信息
+    fetchData(current = 1) { // 默认获取第一页
+      this.page = current
+      api
+        .getRolePageList(this.page, this.limit, this.searchObj)
+        .then((res) => {
+          this.list = res.data.records
+          this.total = res.data.total
+        })
+    },
+    // 根据id删除数据
+    removeDataById(id) {
+      // debugger
+      this.$confirm('此操作将永久删除该角色, 是否继续?', '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(() => { // promise
+        // 点击确定，远程调用ajax
+        return api.removeRoleById(id)
+      }).then((response) => {
+        // 更新页面信息
+        this.fetchData(this.page)
+        this.$message.success(response.message || '删除成功')
+      }).catch()
+    },
+    // 点击弹出添加表单
+    popSaveForm() {
+      this.dialogVisible = !this.dialogVisible
+    },
+    // 关闭表单
+    closeDialog() {
+      if (this.sysRole.id) { // 如果有id就是修改
+        this.sysRole = {} // 修改时关闭表单不保存信息
+      }
+    },
+    saveOrUpdate() {
+      this.saveBtnDisabled = true // 防止表单重复提交
+      if (!this.sysRole.id) { // 如果有id就是修改
+        this.saveData()
+      } else {
+        this.updateData()
+      }
+    },
+    // 新增
+    saveData() {
+      api.saveRole(this.sysRole).then(response => {
+        this.$message.success(response.message || '操作成功')
+        this.dialogVisible = false
+        this.sysRole = {}
+        this.fetchData(this.page)
+      })
+    },
+    // 弹出修改表单
+    edit(id) {
+      this.dialogVisible = true
+      this.fetchDataById(id)
+    },
+    // 获取角色信息
+    fetchDataById(id) {
+      api.getRoleById(id).then(response => {
+        this.sysRole = response.data
+      })
+    },
+    // 修改信息
+    updateData() {
+      api.updateRoleById(this.sysRole).then(response => {
+        this.$message.success(response.message || '操作成功')
+        this.dialogVisible = false
+        this.sysRole = {}
+        this.fetchData(this.page)
+      })
+    }
+  }
+}
+</script>
+
+<style lang='scss' scoped>
+</style>
