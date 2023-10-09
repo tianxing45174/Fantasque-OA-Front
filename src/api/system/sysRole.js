@@ -54,5 +54,15 @@ export default {
       method: 'put',
       data: role
     })
+  },
+  /**
+   * 批量删除角色
+   */
+  batchRemoveRole(idList) {
+    return request({
+      url: `${api_name}/batchRemove`,
+      method: `delete`,
+      data: idList
+    })
   }
 }

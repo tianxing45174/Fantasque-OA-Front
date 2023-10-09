@@ -14,6 +14,7 @@
           <el-button type="primary" icon="el-icon-search" size="mini" :loading="loading" @click="fetchData()">搜索</el-button>
           <el-button icon="el-icon-refresh" size="mini" @click="resetData">重置</el-button>
           <el-button type="success" icon="el-icon-plus" size="mini" @click="popSaveForm">添 加</el-button>
+          <el-button type="danger" icon="el-icon-delete" size="mini" @click="batchRemove()">批量删除</el-button>
         </el-row>
       </el-form>
     </div>
@@ -26,7 +27,7 @@
       style="width: 100%;margin-top: 10px;"
       @selection-change="handleSelectionChange"
     >
-      <el-table-column type="selection" />
+      <el-table-column type="selection" width="40" />
 
       <el-table-column
         label="序号"
@@ -52,12 +53,14 @@
     <el-pagination
       :current-page="page"
       :total="total"
+      :page-sizes="pageSizes"
       :page-size="limit"
       style="padding: 30px 0; text-align: center;"
-      layout="total, prev, pager, next, jumper"
+      layout="total, sizes, prev, pager, next, jumper"
       @current-change="fetchData"
+      @size-change="fetchNewSizeData"
     />
-    <el-dialog title="添加/修改" :visible.sync="dialogVisible" width="40%" @close="closeDialog()">
+    <el-dialog :title="saveOrUpdateDialogTitle" :visible.sync="dialogVisible" width="40%" @close="closeDialog()">
       <el-form ref="dataForm" :model="sysRole" label-width="150px" size="small" style="padding-right: 40px;">
         <el-form-item label="角色名称">
           <el-input v-model="sysRole.roleName" />
@@ -87,9 +90,11 @@ export default {
       list: [], // 列表
       total: 0, // 总记录数
       page: 1, // 页码
+      pageSizes: [2, 3, 5, 10, 20], // 可选分页数, 默认10, 20, 30, 40, 50, 100
       limit: 10, // 每页记录数
       searchObj: {}, // 查询条件
       multipleSelection: [], // 批量删除选中的记录列表
+      saveOrUpdateDialogTitle: '添加',
       // 角色信息
       dialogVisible: false,
       sysRole: {},
@@ -103,8 +108,18 @@ export default {
   },
   methods: {
     // 获取当前页角色列表信息
-    fetchData(current = 1) { // 默认获取第一页
-      this.page = current
+    fetchData(page = 1) { // 默认获取第一页
+      this.page = page
+      api
+        .getRolePageList(this.page, this.limit, this.searchObj)
+        .then((res) => {
+          this.list = res.data.records
+          this.total = res.data.total
+        })
+    },
+    fetchNewSizeData(size) {
+      this.page = 1
+      this.limit = size
       api
         .getRolePageList(this.page, this.limit, this.searchObj)
         .then((res) => {
@@ -128,8 +143,35 @@ export default {
         this.$message.success(response.message || '删除成功')
       }).catch()
     },
+    // 保存勾选复选框数据
+    handleSelectionChange(selection) {
+      this.multipleSelection = selection
+    },
+    // 批量删除
+    batchRemove() {
+      if (this.multipleSelection.length === 0) {
+        this.$message.warning('请选择要删除的记录！')
+        return
+      }
+      this.$confirm('此操作将永久删除该角色, 是否继续?', '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(() => {
+        // 遍历multipleSelection，取出id放入idList
+        var idList = this.multipleSelection.map(({ id }) => {
+          return id
+        })
+        return api.batchRemoveRole(idList)
+      }).then((response) => {
+        this.fetchData()
+        this.$message.success(response.message)
+        this.multipleSelection = []
+      })
+    },
     // 点击弹出添加表单
     popSaveForm() {
+      this.saveOrUpdateDialogTitle = '添加'
       this.dialogVisible = !this.dialogVisible
     },
     // 关闭表单
@@ -157,6 +199,7 @@ export default {
     },
     // 弹出修改表单
     edit(id) {
+      this.saveOrUpdateDialogTitle = '修改'
       this.dialogVisible = true
       this.fetchDataById(id)
     },
